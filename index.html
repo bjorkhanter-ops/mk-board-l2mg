@@ -1885,7 +1885,9 @@ if(typeof module !== 'undefined') module.exports = {
     if(dr.length) $('ftcBars').innerHTML += '<div class="sep">' + dirSep + '</div>' + dr.map(dirBar).join('');
     const dMiss = dir.missing.filter(b => dirMatch(FTC.direct.find(x => x.brand === b), q));
     $('ftcRankNote').innerHTML = '오른쪽 숫자는 가맹점과 직영점 합계(개). 점포 수는 정보공개서의 직전 사업연도 말 현황이며 브랜드의 \'전체\' 행 값을 씀(시도 행은 더하지 않음).' +
-      (dr.length || dMiss.length ? ' 빗금 막대는 정보공개서가 없는 직영 브랜드의 직영점 수로, 감사·사업보고서를 우선하고 없으면 공식 매장 안내나 회사 발표를 인용한 보도 값을 씀' +
+      (dr.length || dMiss.length ? ' 빗금 막대는 정보공개서가 없는 직영 브랜드의 직영점 수로, ' +
+        (latest ? '브랜드마다 가장 최근 기준일의 값을 씀(회사 공시, 공식 매장 안내, 회사 발표를 인용한 보도 중)'
+                : '그해 연말 기준의 감사·사업보고서 값을 우선하고 없으면 공식 매장 안내나 회사 발표를 인용한 보도 값을 씀') +
         (dMiss.length ? '. ' + dMiss.map(esc).join('·') + '는 ' + (latest ? '' : endOf(fst.basis) + ' ') + '값이 없어 \'브랜드별 최신 공개값\'에서만 보임' : '') + '.' : '');
 
     const shown = fst.show === 'top' ? fr.slice(0, FTC_TOP) : fr;
