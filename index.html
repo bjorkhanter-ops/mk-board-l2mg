@@ -1070,6 +1070,8 @@ if(typeof module !== 'undefined') module.exports = {
   .primary-nav a:hover{color:var(--ink); background:var(--surface)}
   .header-actions{display:flex; justify-content:flex-end; align-items:center; gap:10px; min-width:0}
   .head-meta{color:var(--sub); font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap}
+  .to-bold{padding-left:10px; border-left:1px solid var(--line); color:var(--accent); font-size:12px; font-weight:600; text-decoration:none; white-space:nowrap}
+  .to-bold:hover{text-decoration:underline}
 
   /* ── 페이지 제목 · 화면 탭 · 필터 ── */
   /* 제목 줄(제목 | 기준·출처 메모) 아래에 화면 탭이 전체 폭 한 줄로 온다. 안쪽 div는 격자에 풀어 둔다 */
@@ -1233,6 +1235,7 @@ if(typeof module !== 'undefined') module.exports = {
     .fin .row.w .lab small{display:block; margin-left:0}
   }
   @media print{
+    .to-bold{display:none}
     *{-webkit-print-color-adjust:exact; print-color-adjust:exact}
     body{background:#fff; padding:0}
     header,.controls{position:static}
@@ -1256,7 +1259,7 @@ if(typeof module !== 'undefined') module.exports = {
     <span class="nav-group v-barista"><a href="#bar-summary">요약</a><a href="#bar-table">입상 기록</a><a href="#bar-cafe">현재 소속처</a><a href="#bar-source">출처</a></span>
     <span class="nav-group v-m6"><a href="#m6-summary">요약</a><a href="#m6-area">시도별</a><a href="#m6-seoul">서울 권역</a><a href="#m6-source">출처</a></span>
   </nav>
-  <div class="header-actions"><span class="head-meta" id="headMeta"></span></div>
+  <div class="header-actions"><span class="head-meta" id="headMeta"></span><a class="to-bold" href="bold.html">입체판으로 보기</a></div>
 </header>
 <div id="errBanner"></div>
 
