@@ -835,6 +835,40 @@ function ftcDirect(ftc, basis){
   return {rows, missing};
 }
 
+/* ── 카페 산업 개요(첫 화면) — 2026-11-27 사용자 지시: 유통사 현황보다 국내 카페 수와 주요 브랜드 매출·영업이익을 먼저 ──
+   법인 손익 행(finTable 순서 그대로)에 매장 수를 붙인다.
+   1) 정보공개서 브랜드 중 이 손익 행에 이어진(link) 브랜드가 있으면 브랜드별 최신 공개값의 가맹점+직영점을 더한다
+      (한 법인이 커피 브랜드를 둘 이상 낸 경우: 매머드커피·매머드익스프레스, 더리터·더리터 24, 엔제리너스·스탠브루).
+   2) 없으면 정보공개서 밖 직영 브랜드 값(ftcDirect 'latest', 회사 공시·공식 매장 안내)을 쓴다.
+   3) 둘 다 없으면 stores = null. 기준은 정보공개서 기준년도(storeYear, 이어진 브랜드의 시점이 다르면 storeMixed) 또는 직영 값 날짜(storeDate). */
+function ovBrandRows(fin, ftc){
+  const fl = ftc ? ftcRows(ftc, 'latest') : [];
+  const dir = ftc ? ftcDirect(ftc, 'latest').rows : [];
+  return finTable(fin).map(r => {
+    const linked = fl.filter(x => x.link === r.brand);
+    if(linked.length){
+      const ys = linked.map(x => x.year);
+      return Object.assign({}, r, {stores: linked.reduce((s, x) => s + x.all, 0), storeSrc: 'ftc',
+        storeYear: Math.min(...ys), storeMixed: new Set(ys).size > 1, storeDate: null,
+        storeParts: linked.map(x => ({name: x.disp, n: x.all, year: x.year, date: null}))});
+    }
+    const d = dir.find(x => x.brand === r.brand);
+    if(d) return Object.assign({}, r, {stores: d.n, storeSrc: 'direct', storeYear: null, storeMixed: false, storeDate: d.date,
+      storeParts: [{name: d.brand, n: d.n, year: null, date: d.date}]});
+    return Object.assign({}, r, {stores: null, storeSrc: null, storeYear: null, storeMixed: false, storeDate: null, storeParts: []});
+  });
+}
+
+/* 개요 화면의 백화점·아울렛 회사별 요약 — 공개 행·점포만(현대 내부 자료 제외), 회사 순서는 MKT_COMPANIES */
+function ovDeptSummary(rows, stores){
+  const pr = rows.filter(r => !r.internal), ps = stores.filter(s => !s.internal);
+  return MKT_COMPANIES.map(co => {
+    const cafe = pr.filter(r => r.co === co && r.seg === '카페');
+    return {co, stores: ps.filter(s => s.co === co).length, cafe: cafe.length,
+      bakery: pr.filter(r => r.co === co && r.seg === '베이커리·디저트').length, top: brandCounts(cafe).slice(0, 3)};
+  }).filter(x => x.stores > 0);
+}
+
 /* 시도별 합계 — 17개 시도 행만 더한다('전체' 행 제외). 업종 통계(15125527, '전체' 행 없음)를 나란히 둔다 */
 function ftcAreaTotals(ftc, year){
   const y = String(year), n = ftc.areas.length;
@@ -1034,6 +1068,7 @@ if(typeof module !== 'undefined') module.exports = {
   filterRows, filterStores, companySummary, brandCounts, floorMix, storeGroups, chMatch,
   FIN_MODELS, FIN_COLORS, EOK, finTable, finSummary,
   FTC_COLORS, FTC_TOP, ftcRows, ftcSummary, ftcDirect, ftcAreaTotals, ftcRange, ftcMid, ftcMil, ftcEok,
+  ovBrandRows, ovDeptSummary,
   LOCAL_SIGS, LOCAL_MAX, REVIEW_MIN, STALE_DAYS, SIDO_TILES, localSigs, localCmp, localPick, localSummary,
   daysBetween, isStale, cafeKey, WCE_KO, baristaName, baristaFilter, baristaPeople, baristaSummary, baristaGaps, baristaCafes,
   M6_INDS, M6_ALL, M6_COLOR, m6Areas, m6Regions, m6QLabel, m6PrevYearQ, m6Rate, m6Series, m6Latest, m6Eok, m6Pct,
@@ -1216,6 +1251,14 @@ if(typeof module !== 'undefined') module.exports = {
   details.more{margin-top:12px}
   details.more summary{cursor:pointer; font-size:13px; color:var(--accent); font-weight:600}
 
+  /* ── 카페 산업 개요 (첫 화면, 2026-11-27): 전국 카페 수 → 주요 브랜드 매출과 영업이익 → 점포 수 → 백화점·아울렛 요약 ── */
+  body:not([data-view="ov"]) .v-ov{display:none!important}
+  .go{border:0; background:none; padding:0; margin-left:10px; color:var(--accent); font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap}
+  .go:hover{text-decoration:underline}
+  .ovb .row{grid-template-columns:150px minmax(0,1fr) 108px}
+  .ovb .v small{color:var(--faint); margin-left:4px; font-size:12px}
+  table.t td small.bs{color:var(--faint); margin-left:4px; font-size:12px; font-weight:400}
+
   @media (max-width:900px){
     body{padding:0 16px 56px}
     /* 좁은 화면: 머리말은 따라오지 않게 두고, 바로가기는 한 줄 가로 넘김 */
@@ -1240,6 +1283,8 @@ if(typeof module !== 'undefined') module.exports = {
     .hb .row{grid-template-columns:96px minmax(0,1fr) 48px}
     .fin .row{grid-template-columns:96px minmax(0,1fr) 92px}
     .ftc .row{grid-template-columns:96px minmax(0,1fr) 52px}
+    .ovb .row{grid-template-columns:88px minmax(0,1fr) 100px}
+    .section-heading p .go:first-of-type{margin-left:0}
     .fin .row.w .lab{white-space:normal; line-height:1.3}
     .fin .row.w .lab small{display:block; margin-left:0}
   }
@@ -1254,11 +1299,12 @@ if(typeof module !== 'undefined') module.exports = {
   }
 </style>
 </head>
-<body data-view="dept">
+<body data-view="ov">
 <div class="wrap">
 <header>
   <div class="masthead"><span class="logo">TILL WHITE</span><span class="desc">카페 시장</span></div>
   <nav class="primary-nav" aria-label="섹션">
+    <span class="nav-group v-ov"><a href="#ov-summary">요약</a><a href="#ov-fin">브랜드 손익</a><a href="#ov-stores">점포 수</a><a href="#ov-dept">백화점·아울렛</a></span>
     <span class="nav-group v-dept"><a href="#sec-summary">요약</a><a href="#sec-company">회사별</a><a href="#sec-brand">브랜드</a>
     <a href="#sec-floor">층 분포</a><a href="#sec-stores">점포 목록</a><a href="#sec-internal" id="navInternal">현대 매출</a><a href="#sec-source">출처</a></span>
     <span class="nav-group v-ftc"><a href="#ftc-summary">요약</a><a href="#ftc-rank">점포 수 순위</a><a href="#ftc-table">브랜드 표</a>
@@ -1277,14 +1323,17 @@ if(typeof module !== 'undefined') module.exports = {
   <div>
     <h1 id="heroTitle">카페 시장 현황</h1>
     <div class="views" role="tablist" aria-label="화면">
-      <button class="chip" role="tab" data-view="dept">백화점·아울렛 입점 카페</button>
-      <button class="chip" role="tab" data-view="ftc">커피 프랜차이즈 점포 수</button>
+      <!-- 2026-11-27 사용자 지시: 첫 화면은 카페 산업 전체 개요, 유통사(백화점·아울렛)는 뒤로. 순서는 국내 카페 수 → 브랜드 손익 → 점포 수 → 유통 채널 -->
+      <button class="chip" role="tab" data-view="ov">카페 산업 개요</button>
+      <button class="chip" role="tab" data-view="m6">전국 카페 점포·서울 상권</button>
       <button class="chip" role="tab" data-view="fin">커피 브랜드 법인 손익</button>
+      <button class="chip" role="tab" data-view="ftc">커피 프랜차이즈 점포 수</button>
+      <button class="chip" role="tab" data-view="dept">백화점·아울렛 입점 카페</button>
       <button class="chip" role="tab" data-view="local">지역 대표 로컬 카페</button>
       <button class="chip" role="tab" data-view="barista">입상 바리스타 카페</button>
-      <button class="chip" role="tab" data-view="m6">전국 카페 점포·서울 상권</button>
     </div>
   </div>
+  <p class="hero-note v-ov" id="ovNote"></p>
   <p class="hero-note v-dept" id="heroNote"></p>
   <p class="hero-note v-fin" id="finNote"></p>
   <p class="hero-note v-ftc" id="ftcNote"></p>
@@ -1292,6 +1341,46 @@ if(typeof module !== 'undefined') module.exports = {
   <p class="hero-note v-barista" id="barNote"></p>
   <p class="hero-note v-m6" id="m6Note"></p>
 </div>
+
+<section id="ov-summary" class="v-ov">
+  <div class="kpis" id="ovKpis"></div>
+  <div class="note" id="ovKpiNote" style="margin-top:-6px"></div>
+</section>
+
+<section id="ov-fin" class="v-ov">
+  <div class="section-heading"><h2>주요 브랜드 매출과 영업이익</h2><p><span id="ovFinCap"></span><button class="go" data-go="fin">법인 손익 화면으로</button></p></div>
+  <div class="card">
+    <div class="tbl-unit">(단위: 개, 억원, %)</div>
+    <div class="tbl-wrap"><table class="t" id="ovFinTbl"></table></div>
+    <div class="tbl-note" id="ovFinNote"></div>
+  </div>
+</section>
+
+<section id="ov-stores" class="v-ov">
+  <div class="section-heading"><h2>카페 점포 수</h2><p><span id="ovStoresCap"></span><button class="go" data-go="m6">전국 카페 화면으로</button><button class="go" data-go="ftc">프랜차이즈 화면으로</button></p></div>
+  <div class="grid g2">
+    <div class="card">
+      <h3>시도별 카페 점포 <span class="sub" id="ovAreaSub"></span></h3>
+      <div class="hb m6a" id="ovAreaBars"></div>
+      <div class="tbl-note" id="ovAreaNote"></div>
+    </div>
+    <div class="card">
+      <h3>점포 수 상위 커피 브랜드 <span class="sub" id="ovBrandSub"></span></h3>
+      <div class="legend" id="ovBrandLegend"></div>
+      <div class="hb ftc ovb" id="ovBrandBars"></div>
+      <div class="tbl-note" id="ovBrandNote"></div>
+    </div>
+  </div>
+</section>
+
+<section id="ov-dept" class="v-ov">
+  <div class="section-heading"><h2>백화점과 아울렛 입점 카페</h2><p><span id="ovDeptCap"></span><button class="go" data-go="dept">백화점·아울렛 화면으로</button></p></div>
+  <div class="card">
+    <div class="tbl-unit">(단위: 개)</div>
+    <div class="tbl-wrap"><table class="t" id="ovDeptTbl"></table></div>
+    <div class="tbl-note" id="ovDeptNote"></div>
+  </div>
+</section>
 
 <div class="controls v-dept" role="group" aria-label="필터">
   <div class="seg"><span class="sl">회사</span><span id="fCo"></span></div>
@@ -2339,6 +2428,131 @@ if(typeof module !== 'undefined') module.exports = {
   let m6Rt = 0;
   window.addEventListener('resize', () => { clearTimeout(m6Rt); m6Rt = setTimeout(renderM6Trend, 150); });
 
+  // ── 카페 산업 개요 (첫 화면, 2026-11-27 사용자 지시) ──
+  // "국내 카페 수와 주요 브랜드의 매출·영업이익"에 먼저 답한다. 값은 각 상세 화면과 같은 market_core.js 함수로 계산한다(화면끼리 숫자가 어긋나지 않게).
+  let ovHeadMeta = '';
+  const OV_TOP = 10;   // 점포 수 상위 브랜드 막대 수(나머지는 프랜차이즈 화면)
+  const isoOf = s => s ? s.replace(/(\d\d)(\d\d)(\d\d)/, '20$1-$2-$3') : '';
+  function renderOv(){
+    const A = m6Areas(M6);
+    const fs = FTC && FTC.brands.length ? ftcSummary(ftcRows(FTC, FTC.base)) : null;
+    const rows = FIN && FIN.corps.length ? ovBrandRows(FIN, FTC) : [];
+    const LA = FIN ? FIN.latest_all : null;
+    const single = rows.filter(r => !r.whole), whole = rows.filter(r => r.whole);
+    const deptAt = PUB.rows.length ? PUB.rows[0].at : '';
+    const dates = [deptAt, FIN && isoOf(FIN.snapshot), FTC && isoOf(FTC.snapshot), M6 && M6.semas && M6.semas.collected_at].filter(Boolean).sort();
+    ovHeadMeta = dates.length ? krD(dates[dates.length - 1]) + ' 수집' : '';
+    $('ovNote').innerHTML = [
+      A ? '카페 점포 수: 소상공인 상가정보 ' + esc(krYm(A.std_ym)) + ' 기준' : '',
+      fs ? '프랜차이즈 점포 수: 공정위 정보공개서 ' + endOf(FTC.base) + ' 현황' : '',
+      LA ? '브랜드 손익: DART 공시 ' + LA + ' 회계연도' : '',
+    ].filter(Boolean).join('<br>') + '<span class="badge">공개 정보</span>';
+
+    // 머리 숫자: 국내 카페 수 두 가지와 운영 구분별 매출 1위의 매출·영업이익
+    const k = (label, val, unit, sub) => '<div class="kpi"><div class="kl">' + label + '</div><div class="kv">' + val +
+      (unit ? '<small>' + unit + '</small>' : '') + '</div><div class="ks">' + sub + '</div></div>';
+    const topBy = md => single.filter(r => r.model === md && r.latest === LA && r.rev !== null).sort((a, b) => b.rev - a.rev)[0] || null;
+    const tD = topBy('직영 중심'), tF = topBy('가맹 중심');
+    const plTxt = r => r.latest + ' 회계연도 영업이익 ' + eok(r.op) + '억원(이익률 ' + pct1(r.margin) + '%)';
+    $('ovKpis').innerHTML =
+      (A ? k('전국 카페 점포', COMMA(A.total), '개', esc(krYm(A.std_ym)) + ' 기준, 개인 카페를 포함한 카페 업소') : '') +
+      (fs ? k('커피 프랜차이즈 점포', COMMA(fs.all), '개', endOf(FTC.base) + ' 현황, 가맹점 ' + COMMA(fs.frcs) + '개와 직영점 ' + COMMA(fs.dms) + '개') : '') +
+      (tD ? k('매출 1위 ' + esc(tD.brand) + '(직영 중심)', eok(tD.rev), '억원', plTxt(tD)) : '') +
+      (tF ? k('매출 1위 ' + esc(tF.brand) + '(가맹 중심)', eok(tF.rev), '억원', plTxt(tF) + ', 가맹본부 매출') : '');
+    if(!A && !fs && !rows.length) $('ovKpis').innerHTML = '<div class="empty">시장 원장이 없습니다. build_market_data.py를 다시 돌려 주십시오.</div>';
+    // 직영 브랜드 이름은 원장에서 가져온다(스모크: HTML에 직영 브랜드 이름 고정 금지)
+    const dTop = FTC ? ftcDirect(FTC, 'latest').rows[0] : null;
+    $('ovKpiNote').innerHTML = '전국 카페 점포는 상가정보의 카페 업소 수로 개인 카페와 프랜차이즈 매장을 모두 셉니다. 커피 프랜차이즈 점포는 정보공개서를 낸 커피 브랜드의 가맹점과 직영점 합계라 ' +
+      (dTop ? esc(dTop.brand) + '처럼 ' : '') + '가맹사업을 하지 않는 직영 브랜드는 들어 있지 않습니다. 두 숫자는 세는 대상과 시점이 달라 한쪽을 다른 쪽으로 나누지 않습니다.';
+
+    // 주요 브랜드 매출·영업이익 표(법인 손익 화면과 같은 행, 매장 수를 붙임)
+    if(rows.length){
+      const oldBy = {};
+      single.filter(r => r.latest !== LA).forEach(r => { (oldBy[r.latest] = oldBy[r.latest] || []).push(r.brand); });
+      const oldTxt = Object.keys(oldBy).map(Number).sort((x, y) => y - x).map(fy => oldBy[fy].join('·') + '는 ' + fy).join(', ');
+      $('ovFinCap').textContent = LA + ' 회계연도 매출 순입니다' + (oldTxt ? '(' + oldTxt + ')' : '') + '. ';
+      const stTag = r => {
+        if(r.storeSrc === 'direct') return dirShort(r.storeDate);
+        const ys = [...new Set(r.storeParts.map(p => p.year))].sort();
+        return ys.length > 1 ? ys.map(y => "'" + String(y - 1).slice(2)).join('·') + ' 말' : endShort(r.storeYear);
+      };
+      const stTip = r => r.storeParts.filter(p => p.n > 0).map(p => p.name + ' ' + COMMA(p.n) + '개(' + (p.year ? endOf(p.year) + ' 정보공개서' : dirWhen(p.date) + ' 회사 공시·매장 안내') + ')').join('\n');
+      const neg = v => v !== null && v < 0 ? ' neg' : '';
+      const tr = r => {
+        const sub = '<br><small style="color:var(--faint);font-weight:500;margin-left:15px">' + (r.whole ? esc(r.brand) + ' 포함' : esc(r.corp)) + '</small>';
+        return '<tr><td class="num">' + (r.rank ?? '-') + '</td>' +
+          '<td class="co"><span class="sw" style="background:' + FIN_COLORS[r.model] + '"></span>' + esc(r.whole ? r.corp : r.brand) + sub + '</td>' +
+          '<td class="c">' + esc(r.model) + (r.whole ? '<br><small style="color:var(--faint)">법인 전체</small>' : '') + '</td>' +
+          (r.stores === null ? '<td class="num">-</td>' : '<td class="num" title="' + esc(stTip(r)) + '">' + COMMA(r.stores) + '<small class="bs">' + stTag(r) + '</small></td>') +
+          '<td class="num"><b>' + eok(r.rev) + '</b>' + (r.latest !== LA ? '<small class="bs">' + yy(r.latest) + '</small>' : '') + '</td>' +
+          '<td class="num' + neg(r.op) + '">' + eok(r.op) + '</td>' +
+          '<td class="num' + neg(r.margin) + '">' + pct1(r.margin) + '</td>' +
+          '<td class="num' + neg(r.breakYoY ? null : r.yoy) + '">' + (r.breakYoY ? '비교 불가' : r.yoy === null ? '-' : signed(r.yoy)) + '</td></tr>';
+      };
+      $('ovFinTbl').innerHTML = '<thead><tr><th>순위</th><th>브랜드·운영 법인</th><th>구분</th><th>매장 수</th><th>매출</th><th>영업이익</th><th>영업이익률</th><th>매출 증감률</th></tr></thead><tbody>' +
+        single.map(tr).join('') +
+        (whole.length ? '<tr class="sep"><td colspan="8">순위 밖: 커피 외 사업을 포함한 법인 전체 손익(매장 수는 해당 커피 브랜드)</td></tr>' + whole.map(tr).join('') : '') + '</tbody>';
+      $('ovFinNote').innerHTML = '매출과 영업이익은 운영 법인의 별도 재무제표(DART 감사보고서, 상장 법인은 사업보고서) 기준이며 매출 증감률은 직전 회계연도 대비. ' +
+        '가맹 중심 법인의 매출은 가맹본부 매출(가맹점 물품 공급·가맹비·로열티 등)이라 가맹점 판매액 합계가 아니고, 직영 중심 법인의 매출과 크기를 바로 비교하지 않음. ' +
+        '매장 수는 정보공개서의 가맹점과 직영점 합계이고 정보공개서가 없는 직영 브랜드는 회사 공시나 공식 매장 안내 값이며, 작은 글씨가 그 시점. ' +
+        '연도별 매출과 당기순이익, 집계 제외 브랜드와 사유는 법인 손익 화면에 있음.';
+    } else {
+      $('ovFinTbl').innerHTML = '<tbody><tr><td class="c">커피 법인 손익 원장이 없습니다.</td></tr></tbody>';
+    }
+
+    // 카페 점포 수: 시도별 전체 카페 업소, 점포 수 상위 브랜드
+    $('ovStoresCap').textContent = '시도별 막대는 개인 카페를 포함한 전체 카페 업소, 브랜드 막대는 브랜드별 매장 수입니다. ';
+    if(A){
+      const mx = Math.max(...A.rows.map(r => r.n), 1);
+      $('ovAreaSub').textContent = krYm(A.std_ym) + ' 기준, 상가정보';
+      $('ovAreaBars').innerHTML = A.rows.map(r => '<div class="row" data-tip="' + esc(r.name + '\n카페 ' + COMMA(r.n) + '개(전국의 ' + (r.share * 100).toFixed(1) + '%)') + '">' +
+        '<div class="lab">' + esc(r.area) + '</div><div class="track"><i style="width:' + (r.n / mx * 100) + '%;background:' + M6_COLOR + '"></i></div>' +
+        '<div class="v"><b>' + COMMA(r.n) + '</b></div></div>').join('');
+      $('ovAreaNote').textContent = '전국 합계 ' + COMMA(A.total) + '개. 막대에 마우스를 올리면 전국 비중이 나옴. 서울 권역별 점포와 추정 매출은 전국 카페 화면에 있음.';
+    } else {
+      $('ovAreaBars').innerHTML = '<div class="empty">상가정보 원장이 없습니다.</div>';
+    }
+    if(fs){
+      const fl = ftcRows(FTC, 'latest').slice(0, OV_TOP), dr = ftcDirect(FTC, 'latest').rows;
+      const mx = Math.max(...fl.map(r => r.all), ...dr.map(r => r.n), 1);
+      $('ovBrandSub').textContent = '브랜드별 최신 공개값';
+      $('ovBrandLegend').innerHTML = Object.keys(FTC_COLORS).map(x => '<span><i style="background:' + FTC_COLORS[x] + '"></i>' + esc(x) + '</span>').join('') +
+        (dr.length ? '<span><i class="whole" style="background-color:' + FTC_COLORS['직영점'] + '"></i>빗금: 정보공개서 밖 직영 브랜드</span>' : '');
+      $('ovBrandBars').innerHTML = fl.map(r => '<div class="row" data-mn="' + esc(r.mn) + '" style="cursor:pointer" data-tip="' +
+        esc(r.disp + ' (' + r.corp + ')\n' + endOf(r.year) + ' 가맹점 ' + COMMA(r.frcs) + ' · 직영점 ' + COMMA(r.dms) + '\n누르면 프랜차이즈 화면의 브랜드 상세') + '">' +
+        '<div class="lab">' + esc(r.disp) + '</div><div class="track">' +
+        (r.frcs ? '<i style="width:' + (r.frcs / mx * 100) + '%;background:' + FTC_COLORS['가맹점'] + '"></i>' : '') +
+        (r.dms ? '<i style="width:' + (r.dms / mx * 100) + '%;background:' + FTC_COLORS['직영점'] + '"></i>' : '') +
+        '</div><div class="v"><b>' + COMMA(r.all) + '</b><small>' + endShort(r.year) + '</small></div></div>').join('') +
+        (dr.length ? '<div class="sep">정보공개서 밖 직영 브랜드(회사 공시·공식 매장 안내, 기준일이 다름)</div>' + dr.map(r => '<div class="row" data-tip="' +
+          esc(r.brand + ' (' + r.corp + ')\n' + dirWhen(r.date) + ' 직영점 ' + COMMA(r.n) + '\n출처: ' + r.kind + ', ' + r.src) + '">' +
+          '<div class="lab">' + esc(r.brand) + '</div><div class="track"><i class="whole" style="width:' + (r.n / mx * 100) + '%;background-color:' + FTC_COLORS['직영점'] + '"></i></div>' +
+          '<div class="v"><b>' + COMMA(r.n) + '</b><small>' + dirShort(r.date) + '</small></div></div>').join('') : '');
+      $('ovBrandNote').textContent = '정보공개서 점포 수는 가맹점과 직영점 합계이며 직전 사업연도 말 현황(작은 글씨가 그 시점). 상위 ' + OV_TOP + '개 밖 브랜드와 브랜드별 시도 분포는 프랜차이즈 화면에 있음.';
+    } else {
+      $('ovBrandBars').innerHTML = '<div class="empty">공정위 정보공개서 원장이 없습니다.</div>';
+    }
+
+    // 백화점·아울렛 회사별 요약(공개 안내 기준, 현대 내부 자료 제외)
+    const ds = ovDeptSummary(ROWS, STORES);
+    const tot = ds.reduce((a, x) => ({stores: a.stores + x.stores, cafe: a.cafe + x.cafe, bakery: a.bakery + x.bakery}), {stores: 0, cafe: 0, bakery: 0});
+    $('ovDeptCap').textContent = '공식 매장 안내 ' + krD(deptAt) + ' 수집, 신세계는 신세계사이먼 프리미엄아울렛을 포함합니다. ';
+    $('ovDeptTbl').innerHTML = '<thead><tr><th>회사</th><th>대상 점포</th><th>카페</th><th>베이커리·디저트</th><th>점포당 카페</th><th>카페 상위 브랜드</th></tr></thead><tbody>' +
+      ds.map(x => '<tr><td class="co"><span class="sw" style="background:' + MKT_COLORS[x.co] + '"></span>' + esc(x.co) + '</td>' +
+        '<td class="num">' + COMMA(x.stores) + '</td><td class="num">' + COMMA(x.cafe) + '</td><td class="num">' + COMMA(x.bakery) + '</td>' +
+        '<td class="num">' + fmt1(x.stores ? x.cafe / x.stores : null) + '</td><td>' + x.top.map(t => esc(t.bk) + ' ' + COMMA(t.n)).join(', ') + '</td></tr>').join('') +
+      '<tr><td class="c"><b>계</b></td><td class="num"><b>' + COMMA(tot.stores) + '</b></td><td class="num"><b>' + COMMA(tot.cafe) + '</b></td><td class="num"><b>' + COMMA(tot.bakery) + '</b></td>' +
+      '<td class="num"><b>' + fmt1(tot.stores ? tot.cafe / tot.stores : null) + '</b></td><td></td></tr></tbody>';
+    $('ovDeptNote').textContent = '카페와 베이커리·디저트는 브랜드 사전 분류 기준. 매장 수는 공식 안내에 올라 있는 매장이라 패션 매장 안의 카페처럼 안내에 없는 매장은 빠질 수 있음. ' +
+      '점포별 목록과 층 분포는 백화점·아울렛 화면에 있음.';
+  }
+  $('ovBrandBars').addEventListener('click', e => {
+    const r = e.target.closest('[data-mn]');
+    if(r && FTC){ setView('ftc', true); pickBrand(r.dataset.mn); }
+  });
+  // 개요의 '…화면으로' 버튼은 해당 화면 탭과 같게 동작
+  document.addEventListener('click', e => { const g = e.target.closest('button.go[data-go]'); if(g) setView(g.dataset.go, true); });
+
   // ── 화면 전환 ──
   const viewBtns = [...document.querySelectorAll('.views .chip')];
   const deptHeadMeta = $('headMeta').textContent;
@@ -2346,7 +2560,9 @@ if(typeof module !== 'undefined') module.exports = {
   const VIEW_META = {fin: () => finHeadMeta, ftc: () => ftcHeadMeta, local: () => locHeadMeta, barista: () => barHeadMeta};
   const VIEW_HASH = {fin: '#fin-summary', ftc: '#ftc-summary', local: '#loc-summary', barista: '#bar-summary'};
   VIEW_META.m6 = () => m6HeadMeta; VIEW_HASH.m6 = '#m6-summary';   // Tier 5 M6
-  const hashView = () => Object.keys(VIEW_HASH).find(v => location.hash.indexOf(VIEW_HASH[v].split('-')[0] + '-') === 0) || 'dept';
+  // 2026-11-27: 첫 화면을 카페 산업 개요로 바꾸고 백화점·아울렛은 주소 조각 #sec-로 연다(옛 주소 공유분 호환)
+  VIEW_META.ov = () => ovHeadMeta; VIEW_HASH.ov = '#ov-summary'; VIEW_HASH.dept = '#sec-summary';
+  const hashView = () => Object.keys(VIEW_HASH).find(v => location.hash.indexOf(VIEW_HASH[v].split('-')[0] + '-') === 0) || 'ov';
   function setView(v, fromClick){
     document.body.dataset.view = v;
     $('headMeta').textContent = VIEW_META[v] ? VIEW_META[v]() : deptHeadMeta;
@@ -2366,7 +2582,7 @@ if(typeof module !== 'undefined') module.exports = {
     renderStores(rows, stores);
     renderInternal();
   }
-  try { render(); renderSources(); renderFin(); renderFtc(); renderLocal(); renderBarista(); renderM6(); setView(hashView(), false); }
+  try { render(); renderSources(); renderFin(); renderFtc(); renderLocal(); renderBarista(); renderM6(); renderOv(); setView(hashView(), false); }
   catch(e){ err.style.display = 'block'; err.textContent = '화면 생성 오류: ' + e.message; throw e; }
 })();
 </script>

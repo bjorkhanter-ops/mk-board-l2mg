@@ -508,6 +508,40 @@ function ftcDirect(ftc, basis){
   return {rows, missing};
 }
 
+/* ── 카페 산업 개요(첫 화면) — 2026-11-27 사용자 지시: 유통사 현황보다 국내 카페 수와 주요 브랜드 매출·영업이익을 먼저 ──
+   법인 손익 행(finTable 순서 그대로)에 매장 수를 붙인다.
+   1) 정보공개서 브랜드 중 이 손익 행에 이어진(link) 브랜드가 있으면 브랜드별 최신 공개값의 가맹점+직영점을 더한다
+      (한 법인이 커피 브랜드를 둘 이상 낸 경우: 매머드커피·매머드익스프레스, 더리터·더리터 24, 엔제리너스·스탠브루).
+   2) 없으면 정보공개서 밖 직영 브랜드 값(ftcDirect 'latest', 회사 공시·공식 매장 안내)을 쓴다.
+   3) 둘 다 없으면 stores = null. 기준은 정보공개서 기준년도(storeYear, 이어진 브랜드의 시점이 다르면 storeMixed) 또는 직영 값 날짜(storeDate). */
+function ovBrandRows(fin, ftc){
+  const fl = ftc ? ftcRows(ftc, 'latest') : [];
+  const dir = ftc ? ftcDirect(ftc, 'latest').rows : [];
+  return finTable(fin).map(r => {
+    const linked = fl.filter(x => x.link === r.brand);
+    if(linked.length){
+      const ys = linked.map(x => x.year);
+      return Object.assign({}, r, {stores: linked.reduce((s, x) => s + x.all, 0), storeSrc: 'ftc',
+        storeYear: Math.min(...ys), storeMixed: new Set(ys).size > 1, storeDate: null,
+        storeParts: linked.map(x => ({name: x.disp, n: x.all, year: x.year, date: null}))});
+    }
+    const d = dir.find(x => x.brand === r.brand);
+    if(d) return Object.assign({}, r, {stores: d.n, storeSrc: 'direct', storeYear: null, storeMixed: false, storeDate: d.date,
+      storeParts: [{name: d.brand, n: d.n, year: null, date: d.date}]});
+    return Object.assign({}, r, {stores: null, storeSrc: null, storeYear: null, storeMixed: false, storeDate: null, storeParts: []});
+  });
+}
+
+/* 개요 화면의 백화점·아울렛 회사별 요약 — 공개 행·점포만(현대 내부 자료 제외), 회사 순서는 MKT_COMPANIES */
+function ovDeptSummary(rows, stores){
+  const pr = rows.filter(r => !r.internal), ps = stores.filter(s => !s.internal);
+  return MKT_COMPANIES.map(co => {
+    const cafe = pr.filter(r => r.co === co && r.seg === '카페');
+    return {co, stores: ps.filter(s => s.co === co).length, cafe: cafe.length,
+      bakery: pr.filter(r => r.co === co && r.seg === '베이커리·디저트').length, top: brandCounts(cafe).slice(0, 3)};
+  }).filter(x => x.stores > 0);
+}
+
 /* 시도별 합계 — 17개 시도 행만 더한다('전체' 행 제외). 업종 통계(15125527, '전체' 행 없음)를 나란히 둔다 */
 function ftcAreaTotals(ftc, year){
   const y = String(year), n = ftc.areas.length;
@@ -707,6 +741,7 @@ if(typeof module !== 'undefined') module.exports = {
   filterRows, filterStores, companySummary, brandCounts, floorMix, storeGroups, chMatch,
   FIN_MODELS, FIN_COLORS, EOK, finTable, finSummary,
   FTC_COLORS, FTC_TOP, ftcRows, ftcSummary, ftcDirect, ftcAreaTotals, ftcRange, ftcMid, ftcMil, ftcEok,
+  ovBrandRows, ovDeptSummary,
   LOCAL_SIGS, LOCAL_MAX, REVIEW_MIN, STALE_DAYS, SIDO_TILES, localSigs, localCmp, localPick, localSummary,
   daysBetween, isStale, cafeKey, WCE_KO, baristaName, baristaFilter, baristaPeople, baristaSummary, baristaGaps, baristaCafes,
   M6_INDS, M6_ALL, M6_COLOR, m6Areas, m6Regions, m6QLabel, m6PrevYearQ, m6Rate, m6Series, m6Latest, m6Eok, m6Pct,
