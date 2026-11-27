@@ -737,7 +737,30 @@ function m6Pct(v){
   return (t === '0.0' ? '' : v > 0 ? '+' : '-') + t + '%';
 }
 
+/* ── 화면 지도 연결선 (2026-11-27 사용자 지시: 첫 화면에 대시보드 전체의 연결과 지표 자리를 펼쳐 둔다) ──
+   [구획 a, 구획 b, 종류]. 구획 id는 market.html 트리 메뉴·<section id>와 같아야 한다(스모크 §14).
+   종류 sido는 같은 시도 구분으로 나눈 표끼리, corp·locDept·locBar·barDept는 mktCrossLinks가 세는 같은 대상. 센 값이 0이면 선을 긋지 않는다 */
+const MKT_MAP_LINKS = [
+  ['m6-area', 'ftc-area', 'sido'], ['fin-table', 'ftc-link', 'corp'], ['ftc-area', 'loc-map', 'sido'],
+  ['sec-stores', 'loc-list', 'locDept'], ['loc-list', 'bar-cafe', 'locBar'], ['sec-stores', 'bar-cafe', 'barDept'],
+];
+/* 개요 구획 → 그 구획이 요약하는 화면 */
+const MKT_MAP_FEEDS = {'ov-summary': ['m6', 'ftc', 'fin'], 'ov-fin': ['fin'], 'ov-stores': ['m6', 'ftc'], 'ov-dept': ['dept']};
+/* 화면 사이 같은 대상. 카페는 cafeKey 이름 대조(로컬 카페 원장 전체 · 입상자 현재 소속처 · 백화점·아울렛 카페 매장),
+   법인은 정보공개서 법인 연결 가운데 '일치'(법인등록번호가 같음). 백화점 매장은 공개 수집 행만 쓴다(현대 내부 자료 행 제외) */
+function mktCrossLinks(pub, rows){
+  const keyed = names => { const m = new Map(); names.forEach(n => { const k = cafeKey(n); if(k && !m.has(k)) m.set(k, n); }); return m; };
+  const L = keyed(((pub && pub.local && pub.local.rows) || []).map(r => r.name));
+  const B = keyed(baristaCafes((pub && pub.barista && pub.barista.rows) || []).map(c => c.cafe));
+  const D = keyed((rows || []).filter(r => r.seg === '카페' && !r.internal).map(r => r.bk));
+  const both = (a, b) => [...a.keys()].filter(k => b.has(k)).map(k => a.get(k)).sort((x, y) => x < y ? -1 : x > y ? 1 : 0);
+  const links = (pub && pub.ftc && pub.ftc.links) || [];
+  return {locDept: both(L, D), locBar: both(L, B), barDept: both(B, D),
+    corp: links.filter(l => l.status === '일치').map(l => l.brand)};
+}
+
 if(typeof module !== 'undefined') module.exports = {
+  MKT_MAP_LINKS, MKT_MAP_FEEDS, mktCrossLinks,
   MKT_COMPANIES, MKT_COLORS, MKT_SEGMENTS, FLOOR_BUCKETS, parseFloor, floorBucket, mktRows, mktStores,
   filterRows, filterStores, companySummary, brandCounts, floorMix, storeGroups, chMatch,
   FIN_MODELS, FIN_COLORS, EOK, finTable, finSummary,

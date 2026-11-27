@@ -1063,7 +1063,30 @@ function m6Pct(v){
   return (t === '0.0' ? '' : v > 0 ? '+' : '-') + t + '%';
 }
 
+/* ── 화면 지도 연결선 (2026-11-27 사용자 지시: 첫 화면에 대시보드 전체의 연결과 지표 자리를 펼쳐 둔다) ──
+   [구획 a, 구획 b, 종류]. 구획 id는 market.html 트리 메뉴·<section id>와 같아야 한다(스모크 §14).
+   종류 sido는 같은 시도 구분으로 나눈 표끼리, corp·locDept·locBar·barDept는 mktCrossLinks가 세는 같은 대상. 센 값이 0이면 선을 긋지 않는다 */
+const MKT_MAP_LINKS = [
+  ['m6-area', 'ftc-area', 'sido'], ['fin-table', 'ftc-link', 'corp'], ['ftc-area', 'loc-map', 'sido'],
+  ['sec-stores', 'loc-list', 'locDept'], ['loc-list', 'bar-cafe', 'locBar'], ['sec-stores', 'bar-cafe', 'barDept'],
+];
+/* 개요 구획 → 그 구획이 요약하는 화면 */
+const MKT_MAP_FEEDS = {'ov-summary': ['m6', 'ftc', 'fin'], 'ov-fin': ['fin'], 'ov-stores': ['m6', 'ftc'], 'ov-dept': ['dept']};
+/* 화면 사이 같은 대상. 카페는 cafeKey 이름 대조(로컬 카페 원장 전체 · 입상자 현재 소속처 · 백화점·아울렛 카페 매장),
+   법인은 정보공개서 법인 연결 가운데 '일치'(법인등록번호가 같음). 백화점 매장은 공개 수집 행만 쓴다(현대 내부 자료 행 제외) */
+function mktCrossLinks(pub, rows){
+  const keyed = names => { const m = new Map(); names.forEach(n => { const k = cafeKey(n); if(k && !m.has(k)) m.set(k, n); }); return m; };
+  const L = keyed(((pub && pub.local && pub.local.rows) || []).map(r => r.name));
+  const B = keyed(baristaCafes((pub && pub.barista && pub.barista.rows) || []).map(c => c.cafe));
+  const D = keyed((rows || []).filter(r => r.seg === '카페' && !r.internal).map(r => r.bk));
+  const both = (a, b) => [...a.keys()].filter(k => b.has(k)).map(k => a.get(k)).sort((x, y) => x < y ? -1 : x > y ? 1 : 0);
+  const links = (pub && pub.ftc && pub.ftc.links) || [];
+  return {locDept: both(L, D), locBar: both(L, B), barDept: both(B, D),
+    corp: links.filter(l => l.status === '일치').map(l => l.brand)};
+}
+
 if(typeof module !== 'undefined') module.exports = {
+  MKT_MAP_LINKS, MKT_MAP_FEEDS, mktCrossLinks,
   MKT_COMPANIES, MKT_COLORS, MKT_SEGMENTS, FLOOR_BUCKETS, parseFloor, floorBucket, mktRows, mktStores,
   filterRows, filterStores, companySummary, brandCounts, floorMix, storeGroups, chMatch,
   FIN_MODELS, FIN_COLORS, EOK, finTable, finSummary,
@@ -1104,22 +1127,43 @@ if(typeof module !== 'undefined') module.exports = {
   #errBanner{display:none; background:var(--red-bg); color:var(--red); border:1px solid #E6C9C9; border-radius:var(--radius-sm); padding:12px 16px; margin:16px 0; font-size:13px; white-space:pre-wrap}
   #chartTip{position:fixed; z-index:60; pointer-events:none; display:none; background:#fff; border:1px solid var(--line); border-radius:var(--radius); box-shadow:0 4px 14px rgba(20,28,40,.10); padding:8px 11px; font-size:12px; line-height:1.5; color:var(--ink); white-space:pre-line; max-width:300px; font-variant-numeric:tabular-nums}
 
-  /* ── 머리말: 흰 띠 한 줄(로고 · 섹션 바로가기 · 기준일) ── */
-  header{position:sticky; top:0; z-index:50; min-height:var(--head-h); display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:24px; margin:0 -8px; padding:0 8px; background:#fff; box-shadow:0 0 0 100vmax #fff, 0 1px 0 100vmax var(--line); clip-path:inset(0 -100vmax -1px);}
+  /* ── 머리말: 흰 띠 한 줄(로고 · 기준일). 구획 바로가기는 2026-11-27부터 왼쪽 화면 트리의 가지로 옮김 ── */
+  header{position:sticky; top:0; z-index:50; min-height:var(--head-h); display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:24px; margin:0 -8px; padding:0 8px; background:#fff; box-shadow:0 0 0 100vmax #fff, 0 1px 0 100vmax var(--line); clip-path:inset(0 -100vmax -1px);}
   .masthead{display:flex; align-items:center; gap:12px; min-width:0}
   .masthead .logo{font-family:Georgia,"Times New Roman",serif; font-size:16px; letter-spacing:.2em; font-weight:600; color:var(--ink); line-height:1; white-space:nowrap}
   .masthead .desc{padding-left:12px; border-left:1px solid var(--line); font-size:13px; font-weight:600; color:var(--sub); letter-spacing:0; white-space:nowrap}
-  .primary-nav{display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:0 2px; min-width:0}
-  .primary-nav a{color:var(--sub); text-decoration:none; font-size:13px; font-weight:600; padding:6px 10px; border-radius:var(--radius-sm); white-space:nowrap}
-  .primary-nav a:hover{color:var(--ink); background:var(--surface)}
   .header-actions{display:flex; justify-content:flex-end; align-items:center; gap:10px; min-width:0}
   .head-meta{color:var(--sub); font-size:12px; font-variant-numeric:tabular-nums; white-space:nowrap}
   .to-bold{padding-left:10px; border-left:1px solid var(--line); color:var(--accent); font-size:12px; font-weight:600; text-decoration:none; white-space:nowrap}
   .to-bold:hover{text-decoration:underline}
 
-  /* ── 페이지 제목 · 화면 탭 · 필터 ── */
-  /* 제목 줄(제목 | 기준·출처 메모) 아래에 화면 탭이 전체 폭 한 줄로 온다. 안쪽 div는 격자에 풀어 둔다 */
-  .hero-heading{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,480px); grid-template-areas:"title note" "tabs tabs"; align-items:end; gap:4px 32px; padding:28px 0 0; border-bottom:1px solid var(--line)}
+  /* ── 화면 트리 (2026-11-27 사용자 지시: 구획 바로가기를 화면 아래 가지로 달아 위계를 보이게) ──
+     넓은 화면은 왼쪽 레일에 화면 7개를 두고 지금 화면만 펼쳐 구획을 가지로 단다(스크롤하면 지금 구획이 표시됨).
+     1023px 이하는 위치 줄(화면 › 구획)을 눌러 같은 트리를 펼친다 */
+  .shell{display:grid; grid-template-columns:200px minmax(0,1fr); gap:0 32px; align-items:start}
+  .navbox{position:sticky; top:calc(var(--head-h) + 12px); max-height:calc(100vh - var(--head-h) - 24px); overflow-y:auto; padding:28px 0 24px; scrollbar-width:thin}
+  .loc-bar{display:none}
+  .tree ul{list-style:none}
+  .tree .th{font-size:12px; font-weight:600; color:var(--faint); letter-spacing:0; padding:0 0 8px 14px}
+  .tree .tv{display:flex; align-items:center; gap:9px; width:100%; min-height:34px; border:0; border-left:2px solid transparent; background:none; padding:6px 8px 6px 12px; text-align:left; color:var(--sub); font-size:14px; font-weight:600; line-height:1.35; cursor:pointer}
+  .tree .tv::before{content:''; flex:none; width:5px; height:5px; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(-45deg); opacity:.55}
+  .tree .tv:hover{color:var(--ink); background:var(--surface)}
+  .tree .tv.on{color:var(--ink); font-weight:700; border-left-color:var(--accent)}
+  .tree .tv.on::before{transform:translateY(-2px) rotate(45deg)}
+  .tree li>ul{display:none; margin:0 0 10px 17px}
+  .tree li.on>ul{display:block}
+  .tree li li{position:relative; padding-left:14px}
+  .tree li li::before{content:''; position:absolute; left:0; top:0; bottom:0; border-left:1px solid var(--line)}
+  .tree li li:last-child::before{bottom:50%}
+  .tree li li::after{content:''; position:absolute; left:0; top:50%; width:9px; border-top:1px solid var(--line)}
+  .tree li li a{display:block; padding:4px 6px; color:var(--sub); font-size:13px; line-height:1.4; text-decoration:none; border-radius:var(--radius-sm)}
+  .tree li li a:hover{color:var(--ink); background:var(--surface)}
+  .tree li li.cur::after{border-top-color:var(--accent)}
+  .tree li li a.cur{color:var(--accent); font-weight:700}
+
+  /* ── 페이지 제목 · 필터 ── */
+  /* 제목 줄(지금 화면 이름 | 기준·출처 메모). 안쪽 div는 격자에 풀어 둔다 */
+  .hero-heading{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,480px); grid-template-areas:"title note"; align-items:end; gap:4px 32px; padding:28px 0 16px; border-bottom:1px solid var(--line)}
   .hero-heading>div{display:contents}
   .hero-heading h1{grid-area:title; font-size:28px; line-height:1.2; letter-spacing:-.03em; font-weight:700}
   .hero-note{grid-area:note; color:var(--faint); font-size:12px; line-height:1.6; text-align:right}
@@ -1134,12 +1178,6 @@ if(typeof module !== 'undefined') module.exports = {
   .chip i{width:9px; height:9px; border-radius:1px; display:inline-block}
   .chip.on i{box-shadow:0 0 0 1px rgba(255,255,255,.8)}   /* 채운 탭 위에서 회사 색 견본이 묻히지 않게 */
   .search{min-height:34px; border:1px solid var(--line); border-radius:var(--radius-control); padding:6px 10px; font-size:13px; min-width:180px; background:#fff; color:var(--ink)}
-  /* 화면 탭: 채운 버튼 대신 밑줄 탭 한 줄. 활성 탭은 2px 밑줄, 좁은 화면에서는 탭 줄만 가로로 넘긴다 */
-  .views{grid-area:tabs; display:flex; flex-wrap:wrap; gap:0 4px; margin-top:12px; margin-left:-12px}
-  .views::-webkit-scrollbar{display:none}
-  .views .chip{min-height:42px; border:0; border-radius:0; background:none; color:var(--sub); font-size:14px; font-weight:600; padding:8px 12px 10px}
-  .views .chip:hover{color:var(--ink); background:none}
-  .views .chip.on{background:none; color:var(--ink); font-weight:700; box-shadow:inset 0 -2px 0 var(--accent)}
 
   /* ── 패널 · 지표 띠 ── */
   main section{scroll-margin-top:136px}
@@ -1167,6 +1205,8 @@ if(typeof module !== 'undefined') module.exports = {
   /* 블록 출처 줄: 기준일·출처·주석은 블록 아래 12px 보조색 한 묶음 */
   .note{font-size:12px; color:var(--faint); margin-top:12px; line-height:1.6}
   .empty{color:var(--faint); font-size:13px; padding:18px 0}
+  /* 한국어 설명문은 어절 단위로 줄을 바꾼다('카페'가 '카/페'로 갈라지지 않게). 들어갈 자리가 없을 때만 글자 단위 */
+  .section-heading p, .note, .tbl-note, .hero-note, .kpi .kl, .kpi .ks, .tree, .map{word-break:keep-all; overflow-wrap:anywhere}
 
   /* ── 표 (괘선 가로·세로, 숫자 우측, 머리 중앙: report_table_default 성질 계승. 화면용이라 값은 Regular) ── */
   .tbl-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch}
@@ -1222,7 +1262,6 @@ if(typeof module !== 'undefined') module.exports = {
   .m6-charts h4{font-size:14px; font-weight:700; margin-bottom:4px; display:flex; gap:8px; align-items:baseline; flex-wrap:wrap}
   .m6-charts h4 .sub{font-size:12px; font-weight:400; color:var(--faint)}
   .m6-chart{height:230px}
-  .nav-group{display:contents}
   .hb .track i.whole{background-image:repeating-linear-gradient(135deg, rgba(255,255,255,.55) 0 3px, transparent 3px 7px)}
   .legend i.whole{background-image:repeating-linear-gradient(135deg, rgba(255,255,255,.6) 0 2px, transparent 2px 4px)}
   .fin .row{grid-template-columns:150px minmax(0,1fr) 118px}
@@ -1259,17 +1298,82 @@ if(typeof module !== 'undefined') module.exports = {
   .ovb .v small{color:var(--faint); margin-left:4px; font-size:12px}
   table.t td small.bs{color:var(--faint); margin-left:4px; font-size:12px; font-weight:400}
 
+  /* ── 화면 지도 (첫 화면, 2026-11-27 사용자 지시: 대시보드 전체의 연결과 지표 자리를 펼쳐 두고 찾아 들어가게) ──
+     위 줄기 = 개요가 요약하는 화면, 칸 = 화면별 머리 숫자와 구획(왼쪽 트리와 같은 이름), 아래 호 = 같은 시도·법인·카페로 이어지는 곳.
+     점이나 구획에 올리면 이어진 것만 진해지고, 누르면 그 화면의 그 구획으로 간다. 지도 폭이 880px보다 좁으면 칸을 쌓고 호 대신 글줄로 보인다 */
+  .map{position:relative}
+  .map svg.mapl{position:absolute; left:0; top:0; width:100%; height:100%; overflow:visible; pointer-events:none}
+  .map .dot{display:inline-block; flex:none; width:9px; height:9px; border-radius:50%; background:var(--accent)}
+  .map .mh{display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:4px 14px; margin:0 0 36px}
+  .map .mh .dot{background:var(--ink)}
+  .map .mh b{font-size:16px; font-weight:700; letter-spacing:-.015em}
+  .map .mh .here{font-size:12px; color:var(--faint); letter-spacing:0}
+  .map .mh a{font-size:13px; font-weight:600; color:var(--sub); text-decoration:none}
+  .map .cols{display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:0 20px; align-items:start}
+  .map .mc{position:relative; min-width:0}
+  .map .mc::before{content:''; position:absolute; left:4px; top:12px; bottom:0; border-left:1px solid var(--line)}
+  .map .mc-h{position:relative; display:flex; align-items:flex-start; gap:9px; color:var(--ink); text-decoration:none}
+  .map .mc-h .dot{margin-top:5px}
+  .map .mc-h b{font-size:14px; font-weight:700; line-height:1.35; letter-spacing:-.01em}
+  .map .mc-k{margin:8px 0 6px 18px}
+  .map .mc-k div{padding:2px 0}
+  .map .mc-k dt{font-size:12px; color:var(--faint); letter-spacing:0; line-height:1.4}
+  .map .mc-k dd{font-size:16px; font-weight:700; line-height:1.3; letter-spacing:-.01em; font-variant-numeric:tabular-nums; overflow-wrap:anywhere}
+  .map .mc-k dd small{font-size:12px; font-weight:600; color:var(--sub); margin-left:1px; letter-spacing:0}
+  .map .mc-s{list-style:none; padding-bottom:6px}
+  .map .mc-s li{position:relative; padding:2px 0 2px 18px}
+  .map .mc-s li::before{content:''; position:absolute; left:4px; top:12px; width:11px; border-top:1px solid var(--line)}
+  .map .mc-s a{display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--sub); line-height:1.5; text-decoration:none}
+  .map .mc-s .sd{flex:none; width:7px; height:7px; border-radius:50%; border:1px solid #9AA3AE; background:#fff}
+  .map .mc-s a.lk .sd{border-color:var(--accent); background:var(--accent)}
+  .map .mc-s a.src{color:var(--faint)}
+  .map a:hover{color:var(--accent)}
+  .map .ln{display:none}
+  .map .mc, .map path, .map text{transition:opacity .15s}
+  .map path.feed{fill:none; stroke:#C4CAD2; stroke-width:1}
+  .map path.arc{fill:none; stroke:#9AA3AE; stroke-width:1}
+  .map path.hit{fill:none; stroke:transparent; stroke-width:14; pointer-events:stroke}
+  .map text.ql{font-size:12px; fill:var(--sub); letter-spacing:0; paint-order:stroke; stroke:#fff; stroke-width:4px; stroke-linejoin:round}
+  .map.focus .mc:not(.hot){opacity:.32}
+  .map.focus path.arc:not(.hot), .map.focus path.feed:not(.hot), .map.focus text.ql:not(.hot){opacity:.18}
+  .map path.arc.hot, .map path.feed.hot{stroke:var(--accent); stroke-width:1.6}
+  .map text.ql.hot{fill:var(--accent); font-weight:700}
+  .map.focus .mc-s a.hot, .map.focus .mh a.hot{color:var(--accent); font-weight:700}
+  /* 쌓은 지도: 칸은 폭에 따라 2열 또는 1열, 이어지는 곳은 구획 아래 글줄 */
+  .map.stack .mh{justify-content:flex-start; margin-bottom:16px}
+  .map.stack .cols{grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr)); gap:20px 24px}
+  .map.stack .mc::before{bottom:8px}
+  .map.stack .ln{display:block; font-size:12px; color:var(--faint); line-height:1.45; padding:0 0 2px 13px}
+  .map.stack .ln.fd{padding:2px 0 0 18px}
+  .map.stack .mc-k{display:flex; flex-wrap:wrap; gap:2px 28px}
+
+  @media (max-width:1023px){
+    /* 레일 대신 위치 줄(화면 › 구획): 머리말과 필터는 따라오지 않고 위치 줄만 화면 위에 붙는다. 누르면 같은 트리가 펼쳐진다 */
+    header{position:static}
+    .controls{position:static}
+    .shell{grid-template-columns:minmax(0,1fr)}
+    .navbox{position:sticky; top:0; z-index:45; max-height:none; overflow:visible; padding:0; margin:0 -32px; background:#fff; border-bottom:1px solid var(--line)}
+    .loc-bar{display:flex; align-items:center; gap:8px; width:100%; min-height:44px; padding:8px 32px; border:0; background:#fff; color:var(--ink); font-size:14px; text-align:left; cursor:pointer}
+    .loc-bar b{font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+    .loc-bar span{min-width:0; color:var(--sub); font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+    .loc-bar span:not(:empty)::before{content:'›'; margin-right:8px; color:var(--faint)}
+    .loc-bar::after{content:''; flex:none; margin-left:auto; width:6px; height:6px; border-right:1.5px solid var(--sub); border-bottom:1.5px solid var(--sub); transform:translateY(-2px) rotate(45deg)}
+    .navbox.open .loc-bar::after{transform:translateY(2px) rotate(-135deg)}
+    .tree{display:none; position:absolute; left:0; right:0; top:100%; max-height:min(70vh,560px); overflow-y:auto; background:#fff; border-bottom:1px solid var(--line); padding:12px 24px 16px}
+    .navbox.open .tree{display:block}
+    main section{scroll-margin-top:60px}
+  }
   @media (max-width:900px){
     body{padding:0 16px 56px}
-    /* 좁은 화면: 머리말은 따라오지 않게 두고, 바로가기는 한 줄 가로 넘김 */
+    /* 좁은 화면: 머리말은 따라오지 않게 둔다 */
     header{position:static; grid-template-columns:minmax(0,1fr); gap:4px; padding:10px 8px 6px}
-    .primary-nav{flex-wrap:nowrap; justify-content:flex-start; overflow-x:auto; scrollbar-width:none; margin:0 -8px; padding:0 4px}
-    .primary-nav::-webkit-scrollbar{display:none}
     .header-actions{justify-content:flex-start}
-    .hero-heading{grid-template-columns:minmax(0,1fr); grid-template-areas:"title" "note" "tabs"; padding-top:20px}
+    .navbox{margin:0 -16px}
+    .loc-bar{padding:8px 16px}
+    .tree{padding:12px 8px 16px}
+    .hero-heading{grid-template-columns:minmax(0,1fr); grid-template-areas:"title" "note"; padding-top:20px}
     .hero-heading h1{font-size:24px}
     .hero-note{text-align:left}
-    .views{flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; margin:8px -16px 0; padding:0 4px}
     .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
     .kpi{padding:14px 14px 16px}
     .kpi:nth-child(4n+1){border-left:1px solid var(--hair)}
@@ -1293,7 +1397,8 @@ if(typeof module !== 'undefined') module.exports = {
     *{-webkit-print-color-adjust:exact; print-color-adjust:exact}
     body{background:#fff; padding:0}
     header,.controls{position:static}
-    .primary-nav{display:none}
+    .navbox, #ov-map{display:none!important}
+    .shell{display:block}
     .card,.kpis,.hb .row{break-inside:avoid}
     table.t tbody tr:hover td{background:none}
   }
@@ -1303,35 +1408,42 @@ if(typeof module !== 'undefined') module.exports = {
 <div class="wrap">
 <header>
   <div class="masthead"><span class="logo">TILL WHITE</span><span class="desc">카페 시장</span></div>
-  <nav class="primary-nav" aria-label="섹션">
-    <span class="nav-group v-ov"><a href="#ov-summary">요약</a><a href="#ov-fin">브랜드 손익</a><a href="#ov-stores">점포 수</a><a href="#ov-dept">백화점·아울렛</a></span>
-    <span class="nav-group v-dept"><a href="#sec-summary">요약</a><a href="#sec-company">회사별</a><a href="#sec-brand">브랜드</a>
-    <a href="#sec-floor">층 분포</a><a href="#sec-stores">점포 목록</a><a href="#sec-internal" id="navInternal">현대 매출</a><a href="#sec-source">출처</a></span>
-    <span class="nav-group v-ftc"><a href="#ftc-summary">요약</a><a href="#ftc-rank">점포 수 순위</a><a href="#ftc-table">브랜드 표</a>
-    <a href="#ftc-detail">브랜드 상세</a><a href="#ftc-area">시도별</a><a href="#ftc-link">법인 연결</a><a href="#ftc-source">출처</a></span>
-    <span class="nav-group v-fin"><a href="#fin-summary">요약</a><a href="#fin-rank">매출 순위</a><a href="#fin-table">손익 표</a><a href="#fin-source">출처</a></span>
-    <span class="nav-group v-local"><a href="#loc-summary">요약</a><a href="#loc-map">시도 지도</a><a href="#loc-list">카페 목록</a><a href="#loc-source">선정 기준·출처</a></span>
-    <span class="nav-group v-barista"><a href="#bar-summary">요약</a><a href="#bar-table">입상 기록</a><a href="#bar-cafe">현재 소속처</a><a href="#bar-source">출처</a></span>
-    <span class="nav-group v-m6"><a href="#m6-summary">요약</a><a href="#m6-area">시도별</a><a href="#m6-seoul">서울 권역</a><a href="#m6-source">출처</a></span>
-  </nav>
   <div class="header-actions"><span class="head-meta" id="headMeta"></span><a class="to-bold" href="bold.html">입체판으로 보기</a></div>
 </header>
 <div id="errBanner"></div>
 
+<div class="shell">
+<!-- 화면 트리 (2026-11-27 사용자 지시: 구획 바로가기를 상위 화면의 하위 가지로). 화면 순서는 국내 카페 수 → 브랜드 손익 → 점포 수 → 유통 채널(첫 화면 개요, 유통사는 뒤로).
+     구획 이름은 화면 지도(#ovMap)가 이 트리에서 그대로 읽는다 -->
+<nav class="navbox" id="navbox" aria-label="화면과 구획">
+  <button class="loc-bar" id="locBar" type="button" aria-expanded="false" aria-controls="tree"><b id="lbView">카페 산업 개요</b><span id="lbSec"></span></button>
+  <div class="tree" id="tree">
+    <div class="th">화면</div>
+    <ul>
+      <li data-view="ov"><button class="tv" type="button" data-view="ov" aria-expanded="false">카페 산업 개요</button>
+        <ul><li><a href="#ov-summary">요약</a></li><li><a href="#ov-map">화면 지도</a></li><li><a href="#ov-fin">브랜드 손익</a></li><li><a href="#ov-stores">점포 수</a></li><li><a href="#ov-dept">백화점·아울렛</a></li></ul></li>
+      <li data-view="m6"><button class="tv" type="button" data-view="m6" aria-expanded="false">전국 카페 점포·서울 상권</button>
+        <ul><li><a href="#m6-summary">요약</a></li><li><a href="#m6-area">시도별</a></li><li><a href="#m6-seoul">서울 권역</a></li><li><a href="#m6-source">출처</a></li></ul></li>
+      <li data-view="fin"><button class="tv" type="button" data-view="fin" aria-expanded="false">커피 브랜드 법인 손익</button>
+        <ul><li><a href="#fin-summary">요약</a></li><li><a href="#fin-rank">매출 순위</a></li><li><a href="#fin-table">손익 표</a></li><li><a href="#fin-source">출처</a></li></ul></li>
+      <li data-view="ftc"><button class="tv" type="button" data-view="ftc" aria-expanded="false">커피 프랜차이즈 점포 수</button>
+        <ul><li><a href="#ftc-summary">요약</a></li><li><a href="#ftc-rank">점포 수 순위</a></li><li><a href="#ftc-table">브랜드 표</a></li><li><a href="#ftc-detail">브랜드 상세</a></li>
+          <li><a href="#ftc-area">시도별</a></li><li><a href="#ftc-link">법인 연결</a></li><li><a href="#ftc-source">출처</a></li></ul></li>
+      <li data-view="dept"><button class="tv" type="button" data-view="dept" aria-expanded="false">백화점·아울렛 입점 카페</button>
+        <ul><li><a href="#sec-summary">요약</a></li><li><a href="#sec-company">회사별</a></li><li><a href="#sec-brand">브랜드</a></li><li><a href="#sec-floor">층 분포</a></li>
+          <li><a href="#sec-stores">점포 목록</a></li><li id="navInternal"><a href="#sec-internal">현대 매출</a></li><li><a href="#sec-source">출처</a></li></ul></li>
+      <li data-view="local"><button class="tv" type="button" data-view="local" aria-expanded="false">지역 대표 로컬 카페</button>
+        <ul><li><a href="#loc-summary">요약</a></li><li><a href="#loc-map">시도 지도</a></li><li><a href="#loc-list">카페 목록</a></li><li><a href="#loc-source">선정 기준·출처</a></li></ul></li>
+      <li data-view="barista"><button class="tv" type="button" data-view="barista" aria-expanded="false">입상 바리스타 카페</button>
+        <ul><li><a href="#bar-summary">요약</a></li><li><a href="#bar-table">입상 기록</a></li><li><a href="#bar-cafe">현재 소속처</a></li><li><a href="#bar-source">출처</a></li></ul></li>
+    </ul>
+  </div>
+</nav>
+
 <main>
 <div class="hero-heading">
   <div>
-    <h1 id="heroTitle">카페 시장 현황</h1>
-    <div class="views" role="tablist" aria-label="화면">
-      <!-- 2026-11-27 사용자 지시: 첫 화면은 카페 산업 전체 개요, 유통사(백화점·아울렛)는 뒤로. 순서는 국내 카페 수 → 브랜드 손익 → 점포 수 → 유통 채널 -->
-      <button class="chip" role="tab" data-view="ov">카페 산업 개요</button>
-      <button class="chip" role="tab" data-view="m6">전국 카페 점포·서울 상권</button>
-      <button class="chip" role="tab" data-view="fin">커피 브랜드 법인 손익</button>
-      <button class="chip" role="tab" data-view="ftc">커피 프랜차이즈 점포 수</button>
-      <button class="chip" role="tab" data-view="dept">백화점·아울렛 입점 카페</button>
-      <button class="chip" role="tab" data-view="local">지역 대표 로컬 카페</button>
-      <button class="chip" role="tab" data-view="barista">입상 바리스타 카페</button>
-    </div>
+    <h1 id="heroTitle">카페 산업 개요</h1>
   </div>
   <p class="hero-note v-ov" id="ovNote"></p>
   <p class="hero-note v-dept" id="heroNote"></p>
@@ -1345,6 +1457,11 @@ if(typeof module !== 'undefined') module.exports = {
 <section id="ov-summary" class="v-ov">
   <div class="kpis" id="ovKpis"></div>
   <div class="note" id="ovKpiNote" style="margin-top:-6px"></div>
+</section>
+
+<section id="ov-map" class="v-ov">
+  <div class="section-heading"><h2>화면 지도</h2><p>누르면 그 화면의 그 구획으로 갑니다. 위 선은 이 개요가 요약하는 화면, 아래 곡선은 같은 시도·법인·카페가 함께 나오는 구획을 잇습니다.</p></div>
+  <div class="card"><div class="map" id="ovMap"></div><div class="tbl-note" id="ovMapNote"></div></div>
 </section>
 
 <section id="ov-fin" class="v-ov">
@@ -1639,6 +1756,7 @@ if(typeof module !== 'undefined') module.exports = {
 </section>
 </main>
 </div>
+</div>
 
 <script>
 (function(){
@@ -1664,7 +1782,7 @@ if(typeof module !== 'undefined') module.exports = {
   $('heroNote').innerHTML = (pubHd ? '현대·롯데·신세계' : '롯데·신세계') + ': 공식 매장 안내 ' + esc(krD(PUB.rows.length ? PUB.rows[0].at : '')) + ' 수집(신세계는 신세계사이먼 프리미엄아울렛 포함)' +
     (INT ? '<br>현대 매출: 내부 입점 카페 현황 ' + esc(krYm(INT.meta.basis_date)) + ' 기준<span class="badge int">내부 자료 탑재</span>'
          : '<span class="badge">공개 정보</span>');
-  if(!INT){ $('sec-internal').hidden = true; $('navInternal').hidden = true; }
+  if(!INT){ $('sec-internal').hidden = true; $('navInternal').hidden = true; }   // 트리 가지(li)째 숨김
 
   // ── 필터 ──
   // 칩은 한 번만 만들고 render 때는 상태만 바꾼다(다시 그리면 키보드 포커스가 사라짐)
@@ -2545,6 +2663,154 @@ if(typeof module !== 'undefined') module.exports = {
       '<td class="num"><b>' + fmt1(tot.stores ? tot.cafe / tot.stores : null) + '</b></td><td></td></tr></tbody>';
     $('ovDeptNote').textContent = '카페와 베이커리·디저트는 브랜드 사전 분류 기준. 매장 수는 공식 안내에 올라 있는 매장이라 패션 매장 안의 카페처럼 안내에 없는 매장은 빠질 수 있음. ' +
       '점포별 목록과 층 분포는 백화점·아울렛 화면에 있음.';
+    buildMap();   // 화면 지도는 각 화면 지표 띠를 다 그린 뒤에 만든다(머리 숫자를 띠에서 읽음)
+  }
+
+  // ── 화면 지도 (첫 화면, 2026-11-27 사용자 지시: 대시보드 전체의 연결성과 지표 자리를 펼쳐 두고 찾아 들어가게) ──
+  // 칸 이름·구획은 왼쪽 트리에서, 머리 숫자는 각 화면 지표 띠(같은 계산 함수가 그린 값)에서 읽고, 화면 사이 같은 대상은 mktCrossLinks로 센다.
+  // 지도에 숫자를 따로 적지 않는다(카드 요약값과 표는 같은 함수, 하드코딩 금지). 머리 숫자는 처음 그린 값(필터 기본값)으로 고정한다
+  const MAP_KPI = {m6: ['m6Kpis', [0, 1]], fin: ['finKpis', [0, 1]], ftc: ['ftcKpis', [0, 1]], dept: ['kpis', [0, 1]], local: ['locKpis', [0, 1]], barista: ['barKpis', [2, 3]]};
+  const TREE = [...document.querySelectorAll('#tree > ul > li[data-view]')];
+  const viewName = v => { const li = TREE.find(x => x.dataset.view === v); return li ? li.querySelector('.tv').textContent.trim() : ''; };
+  const treeSecs = li => [...li.querySelectorAll(':scope > ul > li')].filter(x => !x.hidden).map(x => x.querySelector('a'));
+  const f1 = n => Math.round(n * 10) / 10;
+  let MAP = null;
+  function buildMap(){
+    const host = $('ovMap');
+    const cols = TREE.map(li => ({v: li.dataset.view, name: viewName(li.dataset.view), secs: treeSecs(li).map(a => ({id: a.hash.slice(1), name: a.textContent.trim()}))}));
+    const secOf = {};
+    cols.forEach(c => c.secs.forEach(s => { secOf[s.id] = {v: c.v, name: s.name}; }));
+    const where = id => viewName(secOf[id].v) + ' › ' + secOf[id].name;
+    const X = mktCrossLinks(PUB, mktRows(PUB, null));   // 공개 행만(현대 내부 자료 행 제외)
+    const links = MKT_MAP_LINKS.filter(([a, b, kind]) => secOf[a] && secOf[b] && secOf[a].v !== secOf[b].v && (kind === 'sido' || (X[kind] || []).length))
+      .map(([a, b, kind], i) => {
+        const names = X[kind] || [], n = names.length;
+        const label = kind === 'sido' ? '같은 시도' : (kind === 'corp' ? '같은 법인 ' : '같은 카페 ') + n + '곳';
+        const detail = kind === 'sido' ? '두 구획 모두 같은 시도 구분으로 나눔'
+          : (kind === 'corp' ? '법인등록번호가 같은 법인 ' : '두 구획에 함께 나오는 카페 ') + n + '곳: ' + names.join(', ');
+        return {i, a, b, va: secOf[a].v, vb: secOf[b].v, label, tip: where(a) + '\n' + where(b) + '\n' + detail};
+      });
+    const ov = cols.find(c => c.v === 'ov'), rest = cols.filter(c => c.v !== 'ov');
+    const feeds = {};
+    Object.keys(MKT_MAP_FEEDS).forEach(h => { if(secOf[h]) feeds[h] = MKT_MAP_FEEDS[h].filter(v => rest.some(c => c.v === v)); });
+    const fedBy = v => Object.keys(feeds).filter(h => feeds[h].includes(v));
+    MAP = {links, feeds, secOf};
+    const kpis = v => {
+      const m = MAP_KPI[v], band = m && $(m[0]);
+      if(!band) return '';
+      const ks = [...band.querySelectorAll('.kpi')];
+      return m[1].map(i => ks[i]).filter(Boolean).map(k => '<div><dt>' + esc(k.querySelector('.kl').textContent) + '</dt><dd>' + k.querySelector('.kv').innerHTML + '</dd></div>').join('');
+    };
+    const lnOf = id => links.filter(l => l.a === id || l.b === id).map(l => '<span class="ln">⇄ ' + esc(where(l.a === id ? l.b : l.a)) + ', ' + esc(l.label) + '</span>').join('');
+    host.innerHTML = '<svg class="mapl" aria-hidden="true"></svg>' +
+      '<div class="mh"><span class="dot"></span><b>' + esc(ov ? ov.name : '') + '</b><span class="here">지금 보는 화면</span>' +
+      (ov ? ov.secs.filter(s => feeds[s.id]).map(s => '<a href="#' + s.id + '" data-feed="' + s.id + '">' + esc(s.name) + '</a>').join('') : '') + '</div>' +
+      '<div class="cols">' + rest.map(c => {
+        const fh = fedBy(c.v);
+        return '<div class="mc" data-view="' + c.v + '">' +
+          '<a class="mc-h" href="#' + (c.secs[0] ? c.secs[0].id : '') + '"><span class="dot"></span><b>' + esc(c.name) + '</b></a>' +
+          (fh.length ? '<span class="ln fd">↑ 개요 › ' + esc(fh.map(h => secOf[h].name).join(', ')) + '</span>' : '') +
+          '<dl class="mc-k">' + kpis(c.v) + '</dl>' +
+          '<ul class="mc-s">' + c.secs.slice(1).map(s => {
+            const lk = links.some(l => l.a === s.id || l.b === s.id);
+            return '<li><a href="#' + s.id + '" data-sec="' + s.id + '"' + (lk ? ' class="lk"' : /-source$/.test(s.id) ? ' class="src"' : '') + '><span class="sd"></span>' + esc(s.name) + '</a>' + lnOf(s.id) + '</li>';
+          }).join('') + '</ul></div>';
+      }).join('') + '</div>';
+    $('ovMapNote').textContent = '큰 점은 화면, 채운 작은 점은 다른 화면과 이어지는 구획입니다. 머리 숫자는 각 화면 지표 띠와 같은 값(백화점·아울렛은 기본 필터 기준)이고, ' +
+      '같은 카페는 괄호·띄어쓰기·기호를 뺀 카페 이름으로 맞춘 결과입니다. 점이나 구획에 마우스를 올리면 이어진 곳만 진해집니다.';
+    const target = t => {
+      if(!t || !t.closest) return null;
+      const s = t.closest('[data-sec]'), fd = t.closest('[data-feed]'), h = t.closest('path.hit'), c = t.closest('.mc');
+      return s ? {sec: s.dataset.sec} : fd ? {hub: fd.dataset.feed} : h ? {arc: +h.dataset.i} : c ? {col: c.dataset.view} : null;
+    };
+    host.addEventListener('pointerover', e => mapHot(target(e.target)));
+    host.addEventListener('pointerleave', () => mapHot(null));
+    host.addEventListener('focusin', e => mapHot(target(e.target)));
+    host.addEventListener('focusout', e => { if(!host.contains(e.relatedTarget)) mapHot(null); });
+    if(window.ResizeObserver) new ResizeObserver(() => drawMap()).observe(host);   // 칸 높이·폭이 바뀌면(글꼴 적용·창 크기) 선을 다시 그림
+    if(document.fonts && document.fonts.ready) document.fonts.ready.then(() => drawMap());
+  }
+  // 올린 것과 이어진 칸·구획·선만 진하게(나머지는 옅게)
+  function mapHot(t){
+    const host = $('ovMap');
+    if(!MAP || !host) return;
+    if(!t){ host.classList.remove('focus'); host.querySelectorAll('.hot').forEach(e => e.classList.remove('hot')); return; }
+    const cols = new Set(), secs = new Set(), arcs = new Set(), fv = new Set(), hubs = new Set();
+    if(t.sec){ secs.add(t.sec); cols.add(MAP.secOf[t.sec].v); MAP.links.forEach(l => { if(l.a === t.sec || l.b === t.sec) arcs.add(l.i); }); }
+    if(t.col){
+      cols.add(t.col);
+      MAP.links.forEach(l => { if(l.va === t.col || l.vb === t.col) arcs.add(l.i); });
+      Object.keys(MAP.feeds).forEach(h => { if(MAP.feeds[h].includes(t.col)){ hubs.add(h); fv.add(t.col); } });
+    }
+    if(t.hub){ hubs.add(t.hub); MAP.feeds[t.hub].forEach(v => { fv.add(v); cols.add(v); }); }
+    if(t.arc !== undefined) arcs.add(t.arc);
+    MAP.links.forEach(l => { if(arcs.has(l.i)){ secs.add(l.a); secs.add(l.b); cols.add(l.va); cols.add(l.vb); } });
+    host.classList.add('focus');
+    host.querySelectorAll('.mc').forEach(e => e.classList.toggle('hot', cols.has(e.dataset.view)));
+    host.querySelectorAll('[data-sec]').forEach(e => e.classList.toggle('hot', secs.has(e.dataset.sec)));
+    host.querySelectorAll('path.arc, text.ql').forEach(e => e.classList.toggle('hot', arcs.has(+e.dataset.i)));
+    host.querySelectorAll('path.feed').forEach(e => e.classList.toggle('hot', fv.has(e.dataset.v)));
+    host.querySelectorAll('[data-feed]').forEach(e => e.classList.toggle('hot', hubs.has(e.dataset.feed)));
+  }
+  // 선 그리기: 위 선은 개요 → 개요가 요약하는 화면(꺾은선), 아래 곡선은 칸 아래 공통 바닥선에서 나가는 호.
+  // 한 칸에서 여러 곡선이 나가면 왼쪽으로 가는 선을 먼저, 같은 쪽은 먼 칸으로 가는 선을 바깥에 두어 곡선끼리 덜 가로지르게 한다
+  function drawMap(){
+    const host = $('ovMap');
+    if(!MAP || !host) return;
+    const W = host.clientWidth;
+    if(!W) return;   // 개요가 숨어 있으면 보일 때 다시 그림
+    const stack = W < 880;
+    host.classList.toggle('stack', stack);
+    const svg = host.querySelector('svg.mapl');
+    if(stack){ svg.innerHTML = ''; host.style.paddingBottom = ''; return; }
+    const R = host.getBoundingClientRect();
+    const box = el => { const r = el.getBoundingClientRect(); return {l: r.left - R.left, r: r.right - R.left, t: r.top - R.top, b: r.bottom - R.top}; };
+    const mh = box(host.querySelector('.mh')), cg = box(host.querySelector('.cols'));
+    const C = {}, order = [];
+    host.querySelectorAll('.mc').forEach(el => { const d = box(el.querySelector('.mc-h .dot')); C[el.dataset.view] = {x: f1((d.l + d.r) / 2), dt: d.t, b: f1(box(el).b)}; order.push(el.dataset.view); });
+    let s = '';
+    const tb = box(host.querySelector('.mh b'));   // 위 선은 개요 이름 아래에서 출발
+    const ox = f1((tb.l + tb.r) / 2), oy = f1(mh.b + 4), busY = f1((mh.b + cg.t) / 2);
+    [...new Set(Object.values(MAP.feeds).flat())].forEach(v => {
+      const tx = C[v].x, ty = f1(C[v].dt - 3), dx = tx - ox, sg = Math.sign(dx), r = Math.min(6, Math.abs(dx) / 2);
+      const d = Math.abs(dx) < 1 ? 'M' + ox + ' ' + oy + 'V' + ty
+        : 'M' + ox + ' ' + oy + 'V' + f1(busY - r) + 'Q' + ox + ' ' + busY + ' ' + f1(ox + sg * r) + ' ' + busY + 'H' + f1(tx - sg * r) + 'Q' + tx + ' ' + busY + ' ' + tx + ' ' + f1(busY + r) + 'V' + ty;
+      s += '<path class="feed" data-v="' + v + '" d="' + d + '"/>';
+    });
+    const idx = v => order.indexOf(v), ports = {}, px = {};
+    MAP.links.forEach(l => [[l.va, l.vb], [l.vb, l.va]].forEach(([v, o]) => { (ports[v] = ports[v] || []).push({i: l.i, o: idx(o), left: idx(o) < idx(v)}); }));
+    Object.keys(ports).forEach(v => {
+      const desc = (p, q) => q.o - p.o;
+      [...ports[v].filter(p => p.left).sort(desc), ...ports[v].filter(p => !p.left).sort(desc)].forEach((p, k) => { px[p.i + '|' + v] = C[v].x + k * 10; });
+    });
+    const yB = f1(cg.b + 14), labels = [];
+    let maxY = yB;
+    MAP.links.forEach(l => {
+      const xa = px[l.i + '|' + l.va], xb = px[l.i + '|' + l.vb];
+      const [x1, x2, v1, v2] = xa < xb ? [xa, xb, l.va, l.vb] : [xb, xa, l.vb, l.va];
+      const h = 18 + 0.1 * (x2 - x1), cy = f1(yB + h);
+      const curve = 'M' + x1 + ' ' + yB + 'C' + x1 + ' ' + cy + ' ' + x2 + ' ' + cy + ' ' + x2 + ' ' + yB;
+      const d = 'M' + C[v1].x + ' ' + C[v1].b + 'V' + yB + 'H' + x1 + curve.replace(/^M[^C]+/, '') + 'H' + C[v2].x + 'V' + C[v2].b;
+      s += '<path class="arc" data-i="' + l.i + '" d="' + d + '"/><path class="hit" data-i="' + l.i + '" d="' + curve + '" data-tip="' + esc(l.tip).replace(/\n/g, '&#10;') + '"/>';
+      labels.push({i: l.i, x: f1((x1 + x2) / 2), y: f1(yB + 0.75 * h), span: x2 - x1, text: l.label});
+      maxY = Math.max(maxY, yB + 0.75 * h);
+    });
+    svg.innerHTML = s + labels.map(b => '<text class="ql" data-i="' + b.i + '" x="' + b.x + '" y="' + b.y + '" text-anchor="middle" dominant-baseline="central">' + esc(b.text) + '</text>').join('');
+    // 이름표 겹침 피하기: 짧은 곡선의 이름표부터 놓고, 먼저 놓인 것과 겹치면 그 아래로 내린다
+    const placed = [];
+    labels.sort((p, q) => p.span - q.span).forEach(b => {
+      const t = svg.querySelector('text.ql[data-i="' + b.i + '"]'), w = t.getBBox().width + 10, hh = 16;
+      let y = b.y;
+      for(let k = 0; k < 6; k++){
+        const hit = placed.find(p => Math.abs(p.x - b.x) < (p.w + w) / 2 && Math.abs(p.y - y) < hh);
+        if(!hit) break;
+        y = hit.y + hh;
+      }
+      if(y !== b.y) t.setAttribute('y', f1(y));
+      placed.push({x: b.x, y, w});
+      maxY = Math.max(maxY, y + hh / 2);
+    });
+    host.style.paddingBottom = Math.ceil(maxY - cg.b + 6) + 'px';
   }
   $('ovBrandBars').addEventListener('click', e => {
     const r = e.target.closest('[data-mn]');
@@ -2553,8 +2819,7 @@ if(typeof module !== 'undefined') module.exports = {
   // 개요의 '…화면으로' 버튼은 해당 화면 탭과 같게 동작
   document.addEventListener('click', e => { const g = e.target.closest('button.go[data-go]'); if(g) setView(g.dataset.go, true); });
 
-  // ── 화면 전환 ──
-  const viewBtns = [...document.querySelectorAll('.views .chip')];
+  // ── 화면 전환 (2026-11-27부터 왼쪽 화면 트리: 화면 단추 + 지금 화면의 구획 가지) ──
   const deptHeadMeta = $('headMeta').textContent;
   /* 화면 키 → 머리말 날짜·주소 조각. 화면을 늘릴 때는 두 표에 한 줄씩 넣는다(2026-11-24 Tier 4) */
   const VIEW_META = {fin: () => finHeadMeta, ftc: () => ftcHeadMeta, local: () => locHeadMeta, barista: () => barHeadMeta};
@@ -2562,15 +2827,79 @@ if(typeof module !== 'undefined') module.exports = {
   VIEW_META.m6 = () => m6HeadMeta; VIEW_HASH.m6 = '#m6-summary';   // Tier 5 M6
   // 2026-11-27: 첫 화면을 카페 산업 개요로 바꾸고 백화점·아울렛은 주소 조각 #sec-로 연다(옛 주소 공유분 호환)
   VIEW_META.ov = () => ovHeadMeta; VIEW_HASH.ov = '#ov-summary'; VIEW_HASH.dept = '#sec-summary';
-  const hashView = () => Object.keys(VIEW_HASH).find(v => location.hash.indexOf(VIEW_HASH[v].split('-')[0] + '-') === 0) || 'ov';
+  const viewOf = h => Object.keys(VIEW_HASH).find(v => (h || '').indexOf(VIEW_HASH[v].split('-')[0] + '-') === 0);
+  const hashView = () => viewOf(location.hash) || 'ov';
   function setView(v, fromClick){
     document.body.dataset.view = v;
     $('headMeta').textContent = VIEW_META[v] ? VIEW_META[v]() : deptHeadMeta;
-    viewBtns.forEach(b => { const on = b.dataset.view === v; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+    TREE.forEach(li => {
+      const on = li.dataset.view === v, b = li.querySelector('.tv');
+      li.classList.toggle('on', on); b.classList.toggle('on', on); b.setAttribute('aria-expanded', on);
+      if(on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
+    $('heroTitle').textContent = $('lbView').textContent = viewName(v);   // 제목 = 지금 화면 이름
     if(fromClick){ history.replaceState(null, '', VIEW_HASH[v] || '#sec-summary'); window.scrollTo(0, 0); }
     if(v === 'm6') renderM6Trend();   // 보일 때 그래프를 그림(Tier 5 M6)
+    if(v === 'ov') drawMap();          // 보일 때 화면 지도 선을 그림
+    spy();
   }
-  viewBtns.forEach(b => b.onclick = () => setView(b.dataset.view, true));
+  // 좁은 화면의 위치 줄: 누르면 트리를 펼치고, 고르거나 바깥을 누르거나 Esc면 접는다
+  const navbox = $('navbox'), locBar = $('locBar');
+  const closeNav = () => { navbox.classList.remove('open'); locBar.setAttribute('aria-expanded', 'false'); };
+  locBar.onclick = e => { e.stopPropagation(); locBar.setAttribute('aria-expanded', navbox.classList.toggle('open')); };
+  TREE.forEach(li => { li.querySelector('.tv').onclick = () => { setView(li.dataset.view, true); closeNav(); }; });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape') closeNav(); });
+  // 위에 붙어 있는 막대(넓은 화면: 머리말·필터, 좁은 화면: 위치 줄)의 아래 끝. 필터가 두 줄로 늘어나도 구획 제목을 가리지 않게 실제 높이를 잰다
+  function stickyOffset(){
+    const pin = el => { if(!el) return 0; const cs = getComputedStyle(el); return cs.position === 'sticky' && cs.display !== 'none' ? (parseFloat(cs.top) || 0) + el.offsetHeight : 0; };
+    const narrow = getComputedStyle(locBar).display !== 'none';
+    return Math.max(pin(document.querySelector('header')), pin(document.querySelector('.controls.v-' + document.body.dataset.view)), narrow ? locBar.offsetHeight : 0) + 12;
+  }
+  // 구획 주소(#화면-구획)로 가기: 다른 화면의 구획이면 화면을 바꾼 뒤 그 자리로 내려간다. 화면 첫 구획(요약)은 맨 위로
+  function goHash(h, instant){
+    const v = viewOf(h);
+    if(!v) return;
+    const switched = v !== document.body.dataset.view;
+    if(switched) setView(v, false);
+    // 화면이 바뀌면 앞 화면 위치에서 미끄러져 갈 이유가 없으므로 바로 그 자리, 같은 화면 안에서만 부드럽게
+    const el = document.getElementById(h.slice(1)), behavior = instant || switched ? 'instant' : 'smooth';
+    if(h === VIEW_HASH[v]) window.scrollTo({top: 0, behavior});
+    else if(el && !el.hidden) window.scrollTo({top: Math.max(0, el.getBoundingClientRect().top + scrollY - stickyOffset()), behavior});
+  }
+  window.addEventListener('hashchange', () => goHash(location.hash || VIEW_HASH.ov));   // 뒤로·앞으로, 주소 직접 입력(조각 없으면 첫 화면)
+  document.addEventListener('click', e => {
+    if(!navbox.contains(e.target)) closeNav();
+    const a = e.target.closest && e.target.closest('a[href^="#"]');
+    if(!a || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const h = a.getAttribute('href');
+    if(!viewOf(h)) return;
+    e.preventDefault();   // 브라우저 기본 이동은 숨은 화면의 구획에 닿지 않고 고정 막대 높이도 모르므로 직접 옮긴다
+    closeNav();
+    if(h !== location.hash) history.pushState(null, '', h);
+    goHash(h);
+  });
+  // 지금 구획 표시: 고정 막대 아래 끝을 지난 마지막 구획. 맨 아래까지 내리면 마지막 구획
+  let spyRaf = 0;
+  function spy(){
+    const li = TREE.find(x => x.classList.contains('on'));
+    if(!li) return;
+    const as = treeSecs(li), off = stickyOffset();
+    let cur = as[0] || null;
+    as.forEach(a => {
+      const el = document.getElementById(a.hash.slice(1));
+      if(el && !el.hidden && el.offsetParent !== null && el.getBoundingClientRect().top - off - 4 <= 0) cur = a;
+    });
+    if(as.length && scrollY > 0 && innerHeight + scrollY >= document.documentElement.scrollHeight - 4) cur = as[as.length - 1];
+    TREE.forEach(x => treeSecs(x).forEach(a => {
+      const on = a === cur;
+      a.classList.toggle('cur', on); a.parentNode.classList.toggle('cur', on);
+      if(on) a.setAttribute('aria-current', 'location'); else a.removeAttribute('aria-current');
+    }));
+    $('lbSec').textContent = cur && cur !== as[0] ? cur.textContent : '';
+  }
+  window.addEventListener('scroll', () => { if(!spyRaf) spyRaf = requestAnimationFrame(() => { spyRaf = 0; spy(); }); }, {passive: true});
+  // 처음 연 주소에 구획 조각이 있으면(입체판 링크 #ftc-area 등) 화면을 그린 뒤 그 자리로
+  function landHash(){ const h = location.hash, v = viewOf(h); if(v && h !== VIEW_HASH[v]) requestAnimationFrame(() => goHash(h, true)); }
 
   function render(){
     renderFilters();
@@ -2582,7 +2911,7 @@ if(typeof module !== 'undefined') module.exports = {
     renderStores(rows, stores);
     renderInternal();
   }
-  try { render(); renderSources(); renderFin(); renderFtc(); renderLocal(); renderBarista(); renderM6(); renderOv(); setView(hashView(), false); }
+  try { render(); renderSources(); renderFin(); renderFtc(); renderLocal(); renderBarista(); renderM6(); renderOv(); setView(hashView(), false); landHash(); }
   catch(e){ err.style.display = 'block'; err.textContent = '화면 생성 오류: ' + e.message; throw e; }
 })();
 </script>
